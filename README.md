@@ -155,9 +155,57 @@ The callback fires after every LLM call. It skips partial (streaming) chunks and
 
 ## Deploying to Gemini Enterprise
 
-1. Deploy this agent to **Vertex AI Agent Engine**
-2. Register the deployed agent in the **Gemini Enterprise console**
-3. No code changes needed — GE detects `application/json+a2ui` parts automatically and renders the buttons natively in the chat shell
+### 1. Fill in your `.env.dev`
+
+```
+GCP_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_CLOUD_STAGING_BUCKET=gs://your-project-adk-staging-dev
+AGENT_DISPLAY_NAME=A2UI Demo Agent (Dev)
+BUCKET_NAME=your-project-adk-staging-dev
+```
+
+### 2. Install deploy dependencies
+
+```bash
+pip install google-cloud-aiplatform[agent_engines,adk] google-cloud-secret-manager google-cloud-storage
+```
+
+### 3. Authenticate
+
+```bash
+gcloud auth application-default login
+gcloud config set project your-gcp-project-id
+```
+
+### 4. Run the deploy script
+
+```bash
+# DEV (default)
+python deploy_to_agent_engine.py
+
+# PROD
+DEPLOYMENT_ENVIRONMENT=prod python deploy_to_agent_engine.py
+```
+
+The script will:
+- Create the GCS staging bucket if it doesn't exist
+- Load any secrets from Secret Manager (if `SECRET_NAME` is set)
+- Check if the agent already exists by `AGENT_DISPLAY_NAME`
+- **Create** on first run → prints the resource name
+- **Update** on subsequent runs → redeploys in place
+
+### 5. Register in Gemini Enterprise console
+
+1. Go to **Gemini Enterprise Admin console** → Agents
+2. Click **Add agent** → **Vertex AI Agent Engine**
+3. Paste the resource name printed by the script:  
+   `projects/xxx/locations/us-central1/reasoningEngines/yyy`
+4. Set visibility (all users / specific groups) → Save
+
+GE automatically detects `application/json+a2ui` parts and renders the buttons natively.
+
+---
 
 Reference implementation: [github.com/wadave/agent-a2ui-demo](https://github.com/wadave/agent-a2ui-demo)  
 A2UI spec: [a2ui.org](https://a2ui.org)
