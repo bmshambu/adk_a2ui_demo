@@ -69,7 +69,12 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
                     "Button": {
                         "child": f"btn_{i}_label",
                         "action": {
-                            "name": "followup_question",
+                            # Workaround test: use the question text as the
+                            # action name — if the GE client displays the name
+                            # for button clicks, the transcript shows the real
+                            # question instead of "User action triggered."
+                            # The agent reads the question from context either way.
+                            "name": b["action"],
                             "context": [
                                 {
                                     "key": "question",

@@ -50,7 +50,10 @@ root_agent = LlmAgent(
         "interactive buttons below your response. "
         "If the user message contains a JSON userAction event with a "
         "'question' value in its context, treat that question text as the "
-        "user's message and answer it directly."
+        "user's message. In that case, begin your reply by restating the "
+        "question on its own line formatted as a markdown quote (e.g. "
+        "'> Can you tell me more about that?'), then answer it. This is "
+        "needed because the chat UI shows a generic label for button clicks."
     ),
     after_model_callback=_append_a2ui_parts,
 )
