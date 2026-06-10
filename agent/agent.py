@@ -1,27 +1,26 @@
-"""Google ADK agent that emits A2UI follow-up buttons as a DataPart.
+"""Google ADK agent that emits A2UI v0.8 follow-up buttons for Gemini Enterprise.
 
-The after_model_callback appends an application/json+a2ui Part to the model's
-final text response.  This is exactly the payload that Gemini Enterprise reads
-and renders as clickable buttons — no server-side post-processing needed.
+The after_model_callback appends the A2UI message sequence (surfaceUpdate,
+dataModelUpdate, beginRendering) to the model's final text response. Each
+message rides as an A2A DataPart with mimeType application/json+a2ui, which
+Gemini Enterprise renders natively as clickable buttons.
+
+When a button is clicked, GE sends back a userAction event containing the
+chosen follow-up question in context.question — the instruction below tells
+the model how to handle that input.
 """
-import json
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
-from google.genai import types
 
-from .a2ui import DEMO_FOLLOWUPS, encode
+from .a2ui import DEMO_FOLLOWUPS, to_genai_part
 
 
-def _append_a2ui_part(
+def _append_a2ui_parts(
     callback_context: CallbackContext,
     llm_response: LlmResponse,
 ) -> LlmResponse | None:
-    """Appends A2UI DataPart to every final text response from the model.
-
-    Skips streaming chunks (partial=True) and tool-call responses so the
-    A2UI card only appears once, after the complete answer.
-    """
+    """Appends the A2UI v0.8 DataParts to every final text response."""
     # Skip streaming chunks — only act on the complete response
     if llm_response.partial:
         return None
@@ -30,19 +29,14 @@ def _append_a2ui_part(
     if not content or not content.parts:
         return None
 
-    # Skip if this response is a function/tool call (no text yet)
+    # Skip tool-call responses — only attach buttons to user-facing text
     has_text = any(p.text for p in content.parts if p.text)
     has_function_call = any(p.function_call for p in content.parts if p.function_call)
     if not has_text or has_function_call:
         return None
 
-    a2ui_part = types.Part(
-        inline_data=types.Blob(
-            mime_type="application/json+a2ui",
-            data=encode(DEMO_FOLLOWUPS),
-        )
-    )
-    content.parts.append(a2ui_part)
+    for message in DEMO_FOLLOWUPS:
+        content.parts.append(to_genai_part(message))
     return llm_response
 
 
@@ -53,7 +47,10 @@ root_agent = LlmAgent(
         "You are a helpful, concise assistant. "
         "Answer every question clearly in 2-4 sentences. "
         "Do not mention follow-up options in your text — they are shown as "
-        "interactive buttons below your response."
+        "interactive buttons below your response. "
+        "If the user message contains a JSON userAction event with a "
+        "'question' value in its context, treat that question text as the "
+        "user's message and answer it directly."
     ),
-    after_model_callback=_append_a2ui_part,
+    after_model_callback=_append_a2ui_parts,
 )
