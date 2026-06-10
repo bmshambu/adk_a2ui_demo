@@ -15,6 +15,7 @@ v0.8 message sequence per response (one DataPart each):
     3. beginRendering   — signals client to render from the root component
 """
 import json
+import uuid
 
 from google.genai import types as genai_types
 
@@ -22,11 +23,14 @@ A2UI_MIME_TYPE = "application/json+a2ui"
 _TAG_START = b"<a2a_datapart_json>"
 _TAG_END = b"</a2a_datapart_json>"
 
-SURFACE_ID = "followup-buttons-surface"
-
 
 def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
     """Builds the A2UI v0.8 message sequence for a prompt + follow-up buttons.
+
+    A fresh surfaceId is generated on every call: the GE chat keys rendered
+    cards by surfaceId, so reusing one makes later responses update the first
+    card instead of rendering a new one (buttons would appear only once per
+    conversation).
 
     Args:
         prompt: Text shown above the buttons.
@@ -34,6 +38,7 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
                  label  – button caption
                  action – follow-up question reported back via userAction
     """
+    surface_id = f"followup-buttons-{uuid.uuid4().hex[:12]}"
     components = [
         {
             "id": "root",
@@ -84,9 +89,9 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
         )
 
     return [
-        {"surfaceUpdate": {"surfaceId": SURFACE_ID, "components": components}},
-        {"dataModelUpdate": {"surfaceId": SURFACE_ID, "contents": {}}},
-        {"beginRendering": {"surfaceId": SURFACE_ID, "root": "root"}},
+        {"surfaceUpdate": {"surfaceId": surface_id, "components": components}},
+        {"dataModelUpdate": {"surfaceId": surface_id, "contents": {}}},
+        {"beginRendering": {"surfaceId": surface_id, "root": "root"}},
     ]
 
 
@@ -112,12 +117,15 @@ def to_genai_part(a2ui_message: dict) -> genai_types.Part:
 
 
 # ── Static follow-up set used by the demo agent ────────────────────────────
-DEMO_FOLLOWUPS = followup_messages(
-    prompt="What would you like to explore next?",
-    buttons=[
-        {"label": "Tell me more",       "action": "Can you tell me more about that?"},
-        {"label": "Give an example",    "action": "Can you give me a concrete example?"},
-        {"label": "Summarize",          "action": "Please summarize the key points in bullet form"},
-        {"label": "Why does it matter?", "action": "Why does this matter in a real-world context?"},
-    ],
-)
+# Must be a function (not a module-level constant): each call generates a
+# fresh surfaceId so every response renders its own button card in GE.
+def demo_followups() -> list[dict]:
+    return followup_messages(
+        prompt="What would you like to explore next?",
+        buttons=[
+            {"label": "Tell me more",       "action": "Can you tell me more about that?"},
+            {"label": "Give an example",    "action": "Can you give me a concrete example?"},
+            {"label": "Summarize",          "action": "Please summarize the key points in bullet form"},
+            {"label": "Why does it matter?", "action": "Why does this matter in a real-world context?"},
+        ],
+    )

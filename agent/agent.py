@@ -13,7 +13,7 @@ from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
 
-from .a2ui import DEMO_FOLLOWUPS, to_genai_part
+from .a2ui import demo_followups, to_genai_part
 
 
 def _append_a2ui_parts(
@@ -35,7 +35,7 @@ def _append_a2ui_parts(
     if not has_text or has_function_call:
         return None
 
-    for message in DEMO_FOLLOWUPS:
+    for message in demo_followups():
         content.parts.append(to_genai_part(message))
     return llm_response
 
