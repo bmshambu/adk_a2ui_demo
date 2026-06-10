@@ -100,6 +100,78 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
     ]
 
 
+def references_modal(references: list[dict], title: str | None = None) -> list[dict]:
+    """Builds an A2UI v0.8 message sequence showing references behind a Modal.
+
+    The chat shows a single compact entry point ("View references (N)");
+    clicking it opens an overlay listing all reference links — keeps the
+    chat window clean even with 10+ references.
+
+    Args:
+        references: List of {"title": str, "url": str} dicts.
+        title: Entry-point label; defaults to "View references (N)".
+    """
+    surface_id = f"references-{uuid.uuid4().hex[:12]}"
+    label = title or f"View references ({len(references)})"
+
+    components = [
+        {
+            "id": "root",
+            "component": {
+                "Modal": {
+                    "entryPointChild": "entry_button",
+                    "contentChild": "ref_list",
+                }
+            },
+        },
+        {
+            "id": "entry_button",
+            "component": {"Text": {"text": {"literalString": f"📚 {label}"}}},
+        },
+        {
+            "id": "ref_list",
+            "component": {
+                "Column": {
+                    "children": {
+                        "explicitList": ["ref_header"]
+                        + [f"ref_{i}" for i in range(len(references))]
+                    }
+                }
+            },
+        },
+        {
+            "id": "ref_header",
+            "component": {
+                "Text": {
+                    "usageHint": "h3",
+                    "text": {"literalString": "References"},
+                }
+            },
+        },
+    ]
+
+    for i, ref in enumerate(references):
+        # GE renders markdown links inside Text components
+        components.append(
+            {
+                "id": f"ref_{i}",
+                "component": {
+                    "Text": {
+                        "text": {
+                            "literalString": f"{i + 1}. [{ref['title']}]({ref['url']})"
+                        }
+                    }
+                },
+            }
+        )
+
+    return [
+        {"surfaceUpdate": {"surfaceId": surface_id, "components": components}},
+        {"dataModelUpdate": {"surfaceId": surface_id, "contents": {}}},
+        {"beginRendering": {"surfaceId": surface_id, "root": "root"}},
+    ]
+
+
 def to_genai_part(a2ui_message: dict) -> genai_types.Part:
     """Wraps one A2UI message so ADK emits it as an A2A DataPart.
 

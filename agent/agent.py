@@ -13,7 +13,22 @@ from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
 
-from .a2ui import demo_followups, to_genai_part
+from .a2ui import demo_followups, references_modal, to_genai_part
+
+# Static references for testing the Modal pattern. In the real agent these
+# would come from the retrieval/tool results for the current turn.
+DEMO_REFERENCES = [
+    {"title": "ISA 315 — Identifying and Assessing Risks", "url": "https://www.iaasb.org/publications/isa-315"},
+    {"title": "COSO Internal Control Framework", "url": "https://www.coso.org/guidance-on-ic"},
+    {"title": "NIST Cybersecurity Framework 2.0", "url": "https://www.nist.gov/cyberframework"},
+    {"title": "ISO 27001:2022 Overview", "url": "https://www.iso.org/standard/27001"},
+    {"title": "PCAOB AS 2110 — Risk Assessment", "url": "https://pcaobus.org/oversight/standards/auditing-standards/details/AS2110"},
+    {"title": "GDPR Article 32 — Security of Processing", "url": "https://gdpr-info.eu/art-32-gdpr/"},
+    {"title": "Basel III Framework Summary", "url": "https://www.bis.org/basel_framework/"},
+    {"title": "OWASP Top 10 (2025)", "url": "https://owasp.org/Top10/"},
+    {"title": "SOC 2 Trust Services Criteria", "url": "https://www.aicpa-cima.com/topic/audit-assurance/soc-2"},
+    {"title": "EU AI Act — Compliance Checklist", "url": "https://artificialintelligenceact.eu/"},
+]
 
 
 def _append_a2ui_parts(
@@ -35,6 +50,10 @@ def _append_a2ui_parts(
     if not has_text or has_function_call:
         return None
 
+    # References behind a Modal (compact entry point keeps the chat clean),
+    # then the follow-up buttons card
+    for message in references_modal(DEMO_REFERENCES):
+        content.parts.append(to_genai_part(message))
     for message in demo_followups():
         content.parts.append(to_genai_part(message))
     return llm_response
