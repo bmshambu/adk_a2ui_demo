@@ -100,34 +100,77 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
     ]
 
 
-def references_modal(references: list[dict], title: str | None = None) -> list[dict]:
-    """Builds an A2UI v0.8 message sequence showing references behind a Modal.
+def _ref_text(comp_id: str, index: int, ref: dict) -> dict:
+    """One reference row as markdown link text (GE renders markdown in Text)."""
+    return {
+        "id": comp_id,
+        "component": {
+            "Text": {
+                "text": {
+                    "literalString": f"**{index + 1}.** [{ref['title']}]({ref['url']})"
+                }
+            }
+        },
+    }
 
-    The chat shows a single compact entry point ("View references (N)");
-    clicking it opens an overlay listing all reference links — keeps the
-    chat window clean even with 10+ references.
+
+def references_modal(
+    references: list[dict],
+    title: str | None = None,
+    inline_count: int = 3,
+) -> list[dict]:
+    """Builds an A2UI v0.8 message sequence for references: top N inline,
+    the full list behind a Modal as a two-column grid.
+
+    Inline part (always visible, compact):
+        Sources:
+        1. <link>   2. <link>   3. <link>
+        📚 View all 10 references        ← Modal entry point
+
+    Modal overlay: the complete list split into two Columns inside a Row —
+    half the height of a single long column, no dividers (the columns
+    provide the visual structure instead).
 
     Args:
         references: List of {"title": str, "url": str} dicts.
-        title: Entry-point label; defaults to "View references (N)".
+        title: Modal entry-point label; defaults to "View all N references".
+        inline_count: How many references to show inline (0 = modal only).
     """
     surface_id = f"references-{uuid.uuid4().hex[:12]}"
-    label = title or f"View references ({len(references)})"
+    label = title or f"View all {len(references)} references"
 
-    # Interleave a Divider between reference rows for visual separation
-    list_children = ["ref_header", "header_divider"]
-    for i in range(len(references)):
-        list_children.append(f"ref_{i}")
-        if i < len(references) - 1:
-            list_children.append(f"div_{i}")
+    inline = references[:inline_count]
+    # Two-column split of the FULL list (left column gets the extra item)
+    half = (len(references) + 1) // 2
 
     components = [
+        # ── Inline part: header + top N + modal entry point ──────────
         {
             "id": "root",
             "component": {
+                "Column": {
+                    "alignment": "start",
+                    "children": {
+                        "explicitList": ["inline_header"]
+                        + [f"inline_ref_{i}" for i in range(len(inline))]
+                        + ["modal"]
+                    },
+                }
+            },
+        },
+        {
+            "id": "inline_header",
+            "component": {
+                "Text": {"usageHint": "h5", "text": {"literalString": "Sources"}}
+            },
+        },
+        # ── Modal: full list as two columns in a row ─────────────────
+        {
+            "id": "modal",
+            "component": {
                 "Modal": {
                     "entryPointChild": "entry_button",
-                    "contentChild": "ref_card",
+                    "contentChild": "modal_card",
                 }
             },
         },
@@ -135,57 +178,65 @@ def references_modal(references: list[dict], title: str | None = None) -> list[d
             "id": "entry_button",
             "component": {"Text": {"text": {"literalString": f"📚 {label}"}}},
         },
-        # Card wrapper gives the overlay proper container padding/background
         {
-            "id": "ref_card",
-            "component": {"Card": {"child": "ref_list"}},
+            "id": "modal_card",
+            "component": {"Card": {"child": "modal_content"}},
         },
         {
-            "id": "ref_list",
+            "id": "modal_content",
             "component": {
                 "Column": {
                     "alignment": "stretch",
-                    "distribution": "start",
-                    "children": {"explicitList": list_children},
+                    "children": {"explicitList": ["modal_header", "columns_row"]},
                 }
             },
         },
         {
-            "id": "ref_header",
+            "id": "modal_header",
             "component": {
-                "Text": {
-                    "usageHint": "h2",
-                    "text": {"literalString": "References"},
+                "Text": {"usageHint": "h2", "text": {"literalString": "References"}}
+            },
+        },
+        {
+            "id": "columns_row",
+            "component": {
+                "Row": {
+                    "alignment": "start",
+                    "distribution": "spaceBetween",
+                    "children": {"explicitList": ["col_left", "col_right"]},
                 }
             },
         },
         {
-            "id": "header_divider",
-            "component": {"Divider": {"axis": "horizontal"}},
+            "id": "col_left",
+            "component": {
+                "Column": {
+                    "alignment": "start",
+                    "children": {
+                        "explicitList": [f"modal_ref_{i}" for i in range(half)]
+                    },
+                }
+            },
+        },
+        {
+            "id": "col_right",
+            "component": {
+                "Column": {
+                    "alignment": "start",
+                    "children": {
+                        "explicitList": [
+                            f"modal_ref_{i}" for i in range(half, len(references))
+                        ]
+                    },
+                }
+            },
         },
     ]
 
+    for i, ref in enumerate(inline):
+        components.append(_ref_text(f"inline_ref_{i}", i, ref))
     for i, ref in enumerate(references):
-        # GE renders markdown links inside Text components
-        components.append(
-            {
-                "id": f"ref_{i}",
-                "component": {
-                    "Text": {
-                        "text": {
-                            "literalString": f"**{i + 1}.** [{ref['title']}]({ref['url']})"
-                        }
-                    }
-                },
-            }
-        )
-        if i < len(references) - 1:
-            components.append(
-                {
-                    "id": f"div_{i}",
-                    "component": {"Divider": {"axis": "horizontal"}},
-                }
-            )
+        components.append(_ref_text(f"modal_ref_{i}", i, ref))
 
     return [
         {"surfaceUpdate": {"surfaceId": surface_id, "components": components}},
