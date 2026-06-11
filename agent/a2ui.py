@@ -69,12 +69,12 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
                     "Button": {
                         "child": f"btn_{i}_label",
                         "action": {
-                            # Workaround test: use the question text as the
-                            # action name — if the GE client displays the name
-                            # for button clicks, the transcript shows the real
-                            # question instead of "User action triggered."
-                            # The agent reads the question from context either way.
-                            "name": b["action"],
+                            # Note: the GE client always shows "User action
+                            # triggered." for button clicks regardless of this
+                            # name (tested) — the readable transcript comes
+                            # from the agent echoing context.question as a
+                            # quote at the top of its reply.
+                            "name": "followup_question",
                             "context": [
                                 {
                                     "key": "question",
@@ -114,13 +114,20 @@ def references_modal(references: list[dict], title: str | None = None) -> list[d
     surface_id = f"references-{uuid.uuid4().hex[:12]}"
     label = title or f"View references ({len(references)})"
 
+    # Interleave a Divider between reference rows for visual separation
+    list_children = ["ref_header", "header_divider"]
+    for i in range(len(references)):
+        list_children.append(f"ref_{i}")
+        if i < len(references) - 1:
+            list_children.append(f"div_{i}")
+
     components = [
         {
             "id": "root",
             "component": {
                 "Modal": {
                     "entryPointChild": "entry_button",
-                    "contentChild": "ref_list",
+                    "contentChild": "ref_card",
                 }
             },
         },
@@ -128,14 +135,18 @@ def references_modal(references: list[dict], title: str | None = None) -> list[d
             "id": "entry_button",
             "component": {"Text": {"text": {"literalString": f"📚 {label}"}}},
         },
+        # Card wrapper gives the overlay proper container padding/background
+        {
+            "id": "ref_card",
+            "component": {"Card": {"child": "ref_list"}},
+        },
         {
             "id": "ref_list",
             "component": {
                 "Column": {
-                    "children": {
-                        "explicitList": ["ref_header"]
-                        + [f"ref_{i}" for i in range(len(references))]
-                    }
+                    "alignment": "stretch",
+                    "distribution": "start",
+                    "children": {"explicitList": list_children},
                 }
             },
         },
@@ -143,10 +154,14 @@ def references_modal(references: list[dict], title: str | None = None) -> list[d
             "id": "ref_header",
             "component": {
                 "Text": {
-                    "usageHint": "h3",
+                    "usageHint": "h2",
                     "text": {"literalString": "References"},
                 }
             },
+        },
+        {
+            "id": "header_divider",
+            "component": {"Divider": {"axis": "horizontal"}},
         },
     ]
 
@@ -158,12 +173,19 @@ def references_modal(references: list[dict], title: str | None = None) -> list[d
                 "component": {
                     "Text": {
                         "text": {
-                            "literalString": f"{i + 1}. [{ref['title']}]({ref['url']})"
+                            "literalString": f"**{i + 1}.** [{ref['title']}]({ref['url']})"
                         }
                     }
                 },
             }
         )
+        if i < len(references) - 1:
+            components.append(
+                {
+                    "id": f"div_{i}",
+                    "component": {"Divider": {"axis": "horizontal"}},
+                }
+            )
 
     return [
         {"surfaceUpdate": {"surfaceId": surface_id, "components": components}},
