@@ -11,8 +11,10 @@ After every text response, the agent attaches A2UI payloads that Gemini Enterpri
 ```
 Agent:  <answer text>
 
-        📚 View references (10)          ← Modal: links open in an overlay,
-                                            keeping the chat clean
+        Sources
+        1. <link>  2. <link>  3. <link>   ← top 3 inline
+        📚 View all 10 references         ← Modal: full list opens in an
+                                            overlay as a two-column grid
         What would you like to explore next?
         [Tell me more] [Give an example] [Summarize] [Why does it matter?]
                                           ← clickable follow-up buttons
@@ -173,7 +175,7 @@ Notes from testing:
 ## Customizing
 
 - **Follow-up questions**: edit the `buttons` list in `demo_followups()` ([agent/a2ui.py](agent/a2ui.py)). `label` is the button caption; `action` is the question the agent answers on click.
-- **References**: `references_modal(references)` takes `{"title", "url"}` dicts — in a real agent, populate from the turn's retrieval results instead of the static `DEMO_REFERENCES` in [agent/agent.py](agent/agent.py).
+- **References**: `references_modal(references, inline_count=3)` takes `{"title", "url"}` dicts — top `inline_count` shown inline, full list behind the Modal as a two-column grid (`inline_count=0` for modal-only). In a real agent, populate from the turn's retrieval results instead of the static `DEMO_REFERENCES` in [agent/agent.py](agent/agent.py).
 
 ## Troubleshooting
 
