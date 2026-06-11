@@ -23,6 +23,20 @@ A2UI_MIME_TYPE = "application/json+a2ui"
 _TAG_START = b"<a2a_datapart_json>"
 _TAG_END = b"</a2a_datapart_json>"
 
+# Surface theming — the ONLY styling the v0.8 standard catalog supports:
+# primaryColor (hex) and font, set via beginRendering.styles. Whether the
+# GE renderer honors these is client-dependent; set to None to omit.
+SURFACE_STYLES: dict | None = {
+    "primaryColor": "#00338D",  # KPMG blue
+}
+
+
+def _begin_rendering(surface_id: str) -> dict:
+    msg = {"beginRendering": {"surfaceId": surface_id, "root": "root"}}
+    if SURFACE_STYLES:
+        msg["beginRendering"]["styles"] = SURFACE_STYLES
+    return msg
+
 
 def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
     """Builds the A2UI v0.8 message sequence for a prompt + follow-up buttons.
@@ -96,7 +110,7 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
     return [
         {"surfaceUpdate": {"surfaceId": surface_id, "components": components}},
         {"dataModelUpdate": {"surfaceId": surface_id, "contents": {}}},
-        {"beginRendering": {"surfaceId": surface_id, "root": "root"}},
+        _begin_rendering(surface_id),
     ]
 
 
@@ -241,7 +255,7 @@ def references_modal(
     return [
         {"surfaceUpdate": {"surfaceId": surface_id, "components": components}},
         {"dataModelUpdate": {"surfaceId": surface_id, "contents": {}}},
-        {"beginRendering": {"surfaceId": surface_id, "root": "root"}},
+        _begin_rendering(surface_id),
     ]
 
 
