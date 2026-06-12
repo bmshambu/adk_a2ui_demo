@@ -13,7 +13,13 @@ from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models.llm_response import LlmResponse
 
-from .a2ui import demo_followups, references_modal, to_genai_part
+from .a2ui import (
+    clicked_card_replacement,
+    demo_followups,
+    extract_user_action,
+    references_modal,
+    to_genai_part,
+)
 
 # Static references for testing the Modal pattern. In the real agent these
 # would come from the retrieval/tool results for the current turn.
@@ -49,6 +55,18 @@ def _append_a2ui_parts(
     has_function_call = any(p.function_call for p in content.parts if p.function_call)
     if not has_text or has_function_call:
         return None
+
+    # If this turn was triggered by a button click, rewrite the clicked
+    # button card in place to show the chosen question — mitigates GE's
+    # fixed "User action triggered." bubble by making the card itself
+    # display what was selected.
+    user_action = extract_user_action(callback_context.user_content)
+    if user_action:
+        question = (user_action.get("context") or {}).get("question")
+        surface_id = user_action.get("surfaceId")
+        if question and surface_id:
+            for message in clicked_card_replacement(surface_id, question):
+                content.parts.append(to_genai_part(message))
 
     # References behind a Modal (compact entry point keeps the chat clean),
     # then the follow-up buttons card

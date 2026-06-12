@@ -23,19 +23,11 @@ A2UI_MIME_TYPE = "application/json+a2ui"
 _TAG_START = b"<a2a_datapart_json>"
 _TAG_END = b"</a2a_datapart_json>"
 
-# Surface theming — the ONLY styling the v0.8 standard catalog supports:
-# primaryColor (hex) and font, set via beginRendering.styles. Whether the
-# GE renderer honors these is client-dependent; set to None to omit.
-SURFACE_STYLES: dict | None = {
-    "primaryColor": "#00338D",  # KPMG blue
-}
-
-
+# Note: beginRendering.styles (primaryColor / font per the v0.8 standard
+# catalog) was tested and is NOT honored by the GE renderer — GE enforces
+# its own theme. No styling control is available from the payload.
 def _begin_rendering(surface_id: str) -> dict:
-    msg = {"beginRendering": {"surfaceId": surface_id, "root": "root"}}
-    if SURFACE_STYLES:
-        msg["beginRendering"]["styles"] = SURFACE_STYLES
-    return msg
+    return {"beginRendering": {"surfaceId": surface_id, "root": "root"}}
 
 
 def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
@@ -111,6 +103,69 @@ def followup_messages(prompt: str, buttons: list[dict]) -> list[dict]:
         {"surfaceUpdate": {"surfaceId": surface_id, "components": components}},
         {"dataModelUpdate": {"surfaceId": surface_id, "contents": {}}},
         _begin_rendering(surface_id),
+    ]
+
+
+def extract_user_action(content) -> dict | None:
+    """Extracts a userAction event from incoming user content, if present.
+
+    GE sends button clicks as an A2A DataPart; ADK converts it to a tagged
+    text/plain inline_data blob (same convention as outgoing parts). Returns
+    the userAction dict ({"name", "surfaceId", "context", ...}) or None.
+    """
+    if not content or not content.parts:
+        return None
+    for p in content.parts:
+        data = None
+        if (
+            p.inline_data
+            and p.inline_data.mime_type == "text/plain"
+            and p.inline_data.data
+            and p.inline_data.data.startswith(_TAG_START)
+        ):
+            raw = p.inline_data.data[len(_TAG_START):-len(_TAG_END)]
+            try:
+                data = json.loads(raw)
+            except (ValueError, UnicodeDecodeError):
+                continue
+        elif p.text and "userAction" in p.text:
+            try:
+                data = json.loads(p.text)
+            except ValueError:
+                continue
+        if not data:
+            continue
+        # DataPart shape: {"kind": "data", "data": {"userAction": {...}}}
+        ua = data.get("data", data).get("userAction")
+        if ua:
+            return ua
+    return None
+
+
+def clicked_card_replacement(surface_id: str, question: str) -> list[dict]:
+    """Rewrites an already-rendered button card to show the chosen question.
+
+    GE shows a fixed "User action triggered." bubble for clicks (not
+    controllable from the payload). As mitigation, this updates the clicked
+    surface in place — the buttons disappear and the card shows which
+    question was selected, making the transcript self-explanatory.
+    """
+    return [
+        {
+            "surfaceUpdate": {
+                "surfaceId": surface_id,
+                "components": [
+                    {
+                        "id": "root",
+                        "component": {
+                            "Text": {
+                                "text": {"literalString": f"🗨️ {question}"}
+                            }
+                        },
+                    }
+                ],
+            }
+        },
     ]
 
 
